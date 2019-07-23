@@ -2,20 +2,18 @@
 
 namespace Ambta\DoctrineEncryptBundle\Encryptors;
 
-use \ParagonIE\Halite\HiddenString;
-use \ParagonIE\Halite\EncryptionKey;
+use AppBundle\Entity\Document;
+use Doctrine\Common\Util\ClassUtils;
 use \ParagonIE\Halite\KeyFactory;
-use \ParagonIE\Halite\Symmetric\Crypto;
+use ParagonIE\Halite\Symmetric\Crypto;
+use ParagonIE\HiddenString\HiddenString;
+use Symfony\Component\PropertyAccess\PropertyAccess;
 
 /**
  * Class for encrypting and decrypting with the halite library
- *
- * @author Michael de Groot <specamps@gmail.com>
  */
-
 class HaliteEncryptor implements EncryptorInterface
 {
-    private $encryptionKey;
     private $keyFile;
 
     /**
@@ -23,37 +21,56 @@ class HaliteEncryptor implements EncryptorInterface
      */
     public function __construct(string $keyFile)
     {
-        $this->encryptionKey = null;
         $this->keyFile = $keyFile;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function encrypt($data)
+    public function encrypt($entity, $data)
     {
-        return \ParagonIE\Halite\Symmetric\Crypto::encrypt(new HiddenString($data), $this->getKey());
+        $document = $this->getDocument($entity);
+
+        return Crypto::encrypt(new HiddenString($data), $this->getKey($document));
     }
 
     /**
      * {@inheritdoc}
      */
-    public function decrypt($data)
+    public function decrypt($entity, $data)
     {
-        return \ParagonIE\Halite\Symmetric\Crypto::decrypt($data, $this->getKey());
+        $document = $this->getDocument($entity);
+
+        return Crypto::decrypt($data, $this->getKey($document));
     }
 
-    private function getKey()
+    /**
+     * @param Document $document
+     *
+     * @return \ParagonIE\Halite\Symmetric\EncryptionKey|null
+     * @throws \ParagonIE\Halite\Alerts\CannotPerformOperation
+     * @throws \ParagonIE\Halite\Alerts\InvalidKey
+     */
+    private function getKey(Document $document)
     {
-        if ($this->encryptionKey === null) {
-            try {
-                $this->encryptionKey = \ParagonIE\Halite\KeyFactory::loadEncryptionKey($this->keyFile);
-            } catch (\ParagonIE\Halite\Alerts\CannotPerformOperation $e) {
-                $this->encryptionKey = KeyFactory::generateEncryptionKey();
-                \ParagonIE\Halite\KeyFactory::save($this->encryptionKey, $this->keyFile);
-            }
+        return KeyFactory::importEncryptionKey(new HiddenString($document->getEncryptionKey()));
+    }
+
+    private function getDocument($entity): Document
+    {
+        // Get the real class, we don't want to use the proxy classes
+        if (strstr(get_class($entity), 'Proxies')) {
+            $className = ClassUtils::getClass($entity);
+        } else {
+            $className = get_class($entity);
         }
 
-        return $this->encryptionKey;
+        if ($className === Document::class) {
+            return $entity;
+        } else {
+            $pac = PropertyAccess::createPropertyAccessor();
+
+            return $pac->getValue($entity, 'document');
+        }
     }
 }

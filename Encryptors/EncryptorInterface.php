@@ -16,14 +16,16 @@ interface EncryptorInterface
     public function __construct(string $keyFile);
 
     /**
+     * @param object $entity
      * @param string $data Plain text to encrypt
      * @return string Encrypted text
      */
-    public function encrypt($data);
+    public function encrypt($entity, $data);
 
     /**
+     * @param object $entity
      * @param string $data Encrypted text
      * @return string Plain text
      */
-    public function decrypt($data);
+    public function decrypt($entity, $data);
 }
