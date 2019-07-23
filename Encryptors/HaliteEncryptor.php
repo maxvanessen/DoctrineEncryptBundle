@@ -3,6 +3,7 @@
 namespace Ambta\DoctrineEncryptBundle\Encryptors;
 
 use AppBundle\Entity\Document;
+use AppBundle\Entity\User;
 use Doctrine\Common\Util\ClassUtils;
 use \ParagonIE\Halite\KeyFactory;
 use ParagonIE\Halite\Symmetric\Crypto;
@@ -14,6 +15,7 @@ use Symfony\Component\PropertyAccess\PropertyAccess;
  */
 class HaliteEncryptor implements EncryptorInterface
 {
+    private $encryptionKey;
     private $keyFile;
 
     /**
@@ -21,27 +23,28 @@ class HaliteEncryptor implements EncryptorInterface
      */
     public function __construct(string $keyFile)
     {
-        $this->keyFile = $keyFile;
+        $this->encryptionKey = null;
+        $this->keyFile       = $keyFile;
     }
 
     /**
      * {@inheritdoc}
      */
-    public function encrypt($entity, $data)
+    public function encrypt($entity, $data, User $user)
     {
         $document = $this->getDocument($entity);
 
-        return Crypto::encrypt(new HiddenString($data), $this->getKey($document));
+        return Crypto::encrypt(new HiddenString($data), $this->getKey($document, $user));
     }
 
     /**
      * {@inheritdoc}
      */
-    public function decrypt($entity, $data)
+    public function decrypt($entity, $data, User $user)
     {
         $document = $this->getDocument($entity);
 
-        return Crypto::decrypt($data, $this->getKey($document));
+        return Crypto::decrypt($data, $this->getKey($document, $user));
     }
 
     /**
@@ -51,9 +54,21 @@ class HaliteEncryptor implements EncryptorInterface
      * @throws \ParagonIE\Halite\Alerts\CannotPerformOperation
      * @throws \ParagonIE\Halite\Alerts\InvalidKey
      */
-    private function getKey(Document $document)
+    private function getKey(Document $document, User $user)
     {
-        return KeyFactory::importEncryptionKey(new HiddenString($document->getEncryptionKey()));
+        if ($this->encryptionKey === null) {
+            $encryptedKey = $document->getEncryptionKey();
+
+            // Decrypt key
+            $publicKey  = KeyFactory::importEncryptionPublicKey(new HiddenString($user->getPublicKey()));
+            $privateKey = KeyFactory::loadEncryptionSecretKey('/Users/maxvanessen/www/menzis/review-review-api/my_secret_key');
+
+            $decryptedKey = \ParagonIE\Halite\Asymmetric\Crypto::decrypt($encryptedKey, $privateKey, $publicKey);
+
+            $this->encryptionKey = KeyFactory::importEncryptionKey($decryptedKey);
+        }
+
+        return $this->encryptionKey;
     }
 
     private function getDocument($entity): Document

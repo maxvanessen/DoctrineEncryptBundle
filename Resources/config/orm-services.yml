@@ -1,7 +1,7 @@
 services:
     ambta_doctrine_encrypt.orm_subscriber:
         class: Ambta\DoctrineEncryptBundle\Subscribers\DoctrineEncryptSubscriber
-        arguments: ["@annotation_reader", "@ambta_doctrine_encrypt.encryptor"]
+        arguments: ["@annotation_reader", "@ambta_doctrine_encrypt.encryptor","@security.helper"]
         tags:
             -  { name: doctrine.event_subscriber }
     ambta_doctrine_encrypt.subscriber:
