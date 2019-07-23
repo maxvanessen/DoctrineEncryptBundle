@@ -210,56 +210,53 @@ class DoctrineEncryptSubscriber implements EventSubscriber
      */
     public function processFields($entity, $isEncryptOperation = true)
     {
+        if (empty($this->encryptor)) {
+            return $entity;
+        }
 
-        if (!empty($this->encryptor)) {
-            // Check which operation to be used
-            $encryptorMethod = $isEncryptOperation ? 'encrypt' : 'decrypt';
+        // Check which operation to be used
+        $encryptorMethod = $isEncryptOperation ? 'encrypt' : 'decrypt';
 
-            // Get the real class, we don't want to use the proxy classes
-            if (strstr(get_class($entity), 'Proxies')) {
-                $realClass = ClassUtils::getClass($entity);
-            } else {
-                $realClass = get_class($entity);
+        // Get the real class, we don't want to use the proxy classes
+        if (strstr(get_class($entity), 'Proxies')) {
+            $realClass = ClassUtils::getClass($entity);
+        } else {
+            $realClass = get_class($entity);
+        }
+
+        $properties = $this->getClassProperties($realClass);
+
+        // Foreach property in the reflection class
+        foreach ($properties as $refProperty) {
+            if ($this->annReader->getPropertyAnnotation($refProperty, 'Doctrine\ORM\Mapping\Embedded')) {
+                $this->handleEmbeddedAnnotation($entity, $refProperty, $isEncryptOperation);
+                continue;
             }
 
-            // Get ReflectionClass of our entity
-            $reflectionClass = new ReflectionClass($realClass);
-            $properties      = $this->getClassProperties($realClass);
-
-            // Foreach property in the reflection class
-            foreach ($properties as $refProperty) {
-                if ($this->annReader->getPropertyAnnotation($refProperty, 'Doctrine\ORM\Mapping\Embedded')) {
-                    $this->handleEmbeddedAnnotation($entity, $refProperty, $isEncryptOperation);
-                    continue;
-                }
-
-                /**
-                 * If property is an normal value and contains the Encrypt tag, lets encrypt/decrypt that property
-                 */
-                if ($this->annReader->getPropertyAnnotation($refProperty, self::ENCRYPTED_ANN_NAME)) {
-                    $pac   = PropertyAccess::createPropertyAccessor();
-                    $value = $pac->getValue($entity, $refProperty->getName());
-                    if ($encryptorMethod == 'decrypt') {
-                        if (!is_null($value) and !empty($value)) {
-                            if (substr($value, -strlen(self::ENCRYPTION_MARKER)) == self::ENCRYPTION_MARKER) {
-                                $this->decryptCounter++;
-                                $currentPropValue = $this->encryptor->decrypt($entity, substr($value, 0, -5), $this->security->getUser());
-                                $pac->setValue($entity, $refProperty->getName(), $currentPropValue);
-                            }
+            /**
+             * If property is an normal value and contains the Encrypt tag, lets encrypt/decrypt that property
+             */
+            if ($this->annReader->getPropertyAnnotation($refProperty, self::ENCRYPTED_ANN_NAME)) {
+                $pac   = PropertyAccess::createPropertyAccessor();
+                $value = $pac->getValue($entity, $refProperty->getName());
+                if ($encryptorMethod == 'decrypt') {
+                    if (!is_null($value) and !empty($value)) {
+                        if (substr($value, -strlen(self::ENCRYPTION_MARKER)) == self::ENCRYPTION_MARKER) {
+                            $this->decryptCounter++;
+                            $currentPropValue = $this->encryptor->decrypt($entity, substr($value, 0, -5), $this->security->getUser());
+                            $pac->setValue($entity, $refProperty->getName(), $currentPropValue);
                         }
-                    } else {
-                        if (!is_null($value) and !empty($value)) {
-                            if (substr($value, -strlen(self::ENCRYPTION_MARKER)) != self::ENCRYPTION_MARKER) {
-                                $this->encryptCounter++;
-                                $currentPropValue = $this->encryptor->encrypt($entity, $value, $this->security->getUser()).self::ENCRYPTION_MARKER;
-                                $pac->setValue($entity, $refProperty->getName(), $currentPropValue);
-                            }
+                    }
+                } else {
+                    if (!is_null($value) and !empty($value)) {
+                        if (substr($value, -strlen(self::ENCRYPTION_MARKER)) != self::ENCRYPTION_MARKER) {
+                            $this->encryptCounter++;
+                            $currentPropValue = $this->encryptor->encrypt($entity, $value, $this->security->getUser()).self::ENCRYPTION_MARKER;
+                            $pac->setValue($entity, $refProperty->getName(), $currentPropValue);
                         }
                     }
                 }
             }
-
-            return $entity;
         }
 
         return $entity;
