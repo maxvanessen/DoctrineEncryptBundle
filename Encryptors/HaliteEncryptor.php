@@ -17,6 +17,7 @@ class HaliteEncryptor implements EncryptorInterface
 {
     private $encryptionKey;
     private $keyFile;
+    private $documentId;
 
     /**
      * {@inheritdoc}
@@ -24,6 +25,7 @@ class HaliteEncryptor implements EncryptorInterface
     public function __construct(string $keyFile)
     {
         $this->encryptionKey = null;
+        $this->documentId    = null;
         $this->keyFile       = $keyFile;
     }
 
@@ -44,7 +46,7 @@ class HaliteEncryptor implements EncryptorInterface
     {
         $document = $this->getDocument($entity);
 
-        return Crypto::decrypt($data, $this->getKey($document, $user));
+        return Crypto::decrypt($data, $this->getKey($document, $user))->getString();
     }
 
     /**
@@ -56,7 +58,7 @@ class HaliteEncryptor implements EncryptorInterface
      */
     private function getKey(Document $document, User $user)
     {
-        if ($this->encryptionKey === null) {
+        if ($this->encryptionKey === null || $this->documentId !== $document->getId()) {
             $encryptedKey = $document->getEncryptionKey();
 
             // Decrypt key
