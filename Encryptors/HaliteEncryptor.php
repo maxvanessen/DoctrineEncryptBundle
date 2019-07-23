@@ -15,18 +15,16 @@ use Symfony\Component\PropertyAccess\PropertyAccess;
  */
 class HaliteEncryptor implements EncryptorInterface
 {
-    private $encryptionKey;
+    private $encryptionKeys;
     private $keyFile;
-    private $documentId;
 
     /**
      * {@inheritdoc}
      */
     public function __construct(string $keyFile)
     {
-        $this->encryptionKey = null;
-        $this->documentId    = null;
-        $this->keyFile       = $keyFile;
+        $this->encryptionKeys = [];
+        $this->keyFile        = $keyFile;
     }
 
     /**
@@ -58,7 +56,7 @@ class HaliteEncryptor implements EncryptorInterface
      */
     private function getKey(Document $document, User $user)
     {
-        if ($this->encryptionKey === null || $this->documentId !== $document->getId()) {
+        if (isset($this->encryptionKeys[$document->getId()]) === false) {
             $encryptedKey = $document->getEncryptionKey();
 
             // Decrypt key
@@ -67,10 +65,10 @@ class HaliteEncryptor implements EncryptorInterface
 
             $decryptedKey = \ParagonIE\Halite\Asymmetric\Crypto::decrypt($encryptedKey, $privateKey, $publicKey);
 
-            $this->encryptionKey = KeyFactory::importEncryptionKey($decryptedKey);
+            $this->encryptionKeys[$document->getId()] = KeyFactory::importEncryptionKey($decryptedKey);
         }
 
-        return $this->encryptionKey;
+        return $this->encryptionKeys[$document->getId()];
     }
 
     private function getDocument($entity): Document
